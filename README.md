@@ -11,7 +11,7 @@ Any requests/comments/bug reports should be sent to william.aeberhard@gmail.com.
 
 Files contained in this repository:
 
-* spglmetm_0.5.tar.gz, a tarball containing the R package to be installed from R, see below;
+* 
 * this README file.
 
 ### Version History
