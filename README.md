@@ -1,5 +1,5 @@
-RobSSM: R Code for Robust Estimation of State Space Models
-----------------------------------------------------------
+RobSSM: R Code for Robust Estimation for State Space Models
+-----------------------------------------------------------
 
 These separate R scripts provide functions to simulate data according to the North Sea pollock stock assessment state space model and fit the model according to (Laplace-approximated) maximum likelihood (ML) and robust estimation methods. Estimation relies on the R package Template Model Builder (TMB). Details about the methodology and theoretical properties can be found in Aeberhard et al. (2018).
 
