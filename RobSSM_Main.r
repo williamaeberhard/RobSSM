@@ -186,10 +186,8 @@ logFat.ml.am <- matrix(summ.rep[which.logFat,1],AF,TF)
 logFat.se.ml.am <- matrix(summ.rep[which.logFat,2],AF,TF)
 logNat.ml.am <- matrix(summ.rep[which.logNat,1],AN,TN)
 logNat.se.ml.am <- matrix(summ.rep[which.logNat,2],AN,TN)
-Fat.ml.am <- matrix(summ.rep[which.Fat,1],AF,TF)
-Fat.se.ml.am <- matrix(summ.rep[which.Fat,2],AF,TF)
-Nat.ml.am <- matrix(summ.rep[which.Nat,1],AN,TN)
-Nat.se.ml.am <- matrix(summ.rep[which.Nat,2],AN,TN)
+Fat.ml.am <- matrix(summ.rep[which.Fat,1],AF,TF) # pred on original scale
+Nat.ml.am <- matrix(summ.rep[which.Nat,1],AN,TN) # pred on original scale
 
 cbind(theta,theta.ml.am,theta.se.ml.am)
 # ^ true theta, MLE and se
@@ -198,14 +196,200 @@ cbind(theta,theta.ml.am,theta.se.ml.am)
 ### Robust estimation, at model
 
 # Step 1/3: uncorrected robust estimator, minimize robustified marginal negloglik
-# Step 2/3: eval corrected score based on initial uncorrected robust estimate
-# Step 3/3: correct robust estimate by single NR step
+datalist.rob.am <- list('log_Cat'=dat$logCat,'log_Iat'=dat$logIat,
+                        'Mat'=Mat,'daysprop'=daysprop,
+                        'tc'=tc.ssh,'robcode'=robcode)
+parlist.robu.am <- c(opt.ml.am$par,list('log_Fat'=logFat.ini,
+                                        'log_Nat'=logNat.ini))
+obj.robu.am <- MakeADFun(data=datalist.rob.am,
+                         parameters=parlist.robu.am,
+                         random=c('log_Nat','log_Fat'),
+                         DLL="NP_nst",silent=T)
+system.time(opt.robu.am <- nlminb(start=obj.robu.am$par,obj=obj.robu.am$fn,
+                                  gr=obj.robu.am$gr,
+                                  control=list(eval.max=1000,iter.max=1000)))
+# ^ about 2 s on laptop
+opt.robu.am
+# ^ seems to have converged
+
+summ.rep <- summary(rep.robu.am) # overwrite summ.rep, big object
+logFat.robu.am <- matrix(summ.rep[which.logFat,1],AF,TF)
+logNat.robu.am <- matrix(summ.rep[which.logNat,1],AN,TN)
+# ^ predicted randeff based on uncorrected robust estimate, only for initial
+#   values below
+
+
+# Step 2/3 and 3/3: evaluate corrected score based on initial uncorrected robust
+#                   estimate and correct it by single NR step
+
+system.time(opt.robc.am <- NP_nst_nrcorrect(theta.t=opt.robu.am$par,
+                                            obj=obj.robu.am,H=H,maxit=1))
+# ^ XXX seconds with H=1000 # TODO
+str(opt.robc.am,1)
+# ^ list with corrected robust gradient and (finite diff numerical) Hessian
+
+
+# predict randeff based on corrected theta
+parlist.robc <- c(opt.robc.am$theta.t,list('log_Fat'=logFat.robu.am,
+                                           'log_Nat'=logNat.robu.am))
+obj.robc.am <- MakeADFun(data=datalist.rob.am, # same data
+                         parameters=parlist.robc, # updated par
+                         random=c('log_Nat','log_Fat'),
+                         DLL="NP_nst",silent=T)
+invisible(obj.robc.am$fn())
+# ^ no outer optim, just predict randeff with inner optim (Laplace approx)
+
+system.time(rep.robc.am <- sdreport(obj.robc.am,bias.correct=F))
+# ^ about 2 s on laptop
+
+summ.rep <- summary(rep.robc.am) # overwrite summ.rep, big object
+theta.robc.am <- summ.rep[(p+AN*TN+AF*TF+1):(p+AN*TN+AF*TF+p),1] # opt.robc.am$theta
+theta.se.robc.am <- summ.rep[(p+AN*TN+AF*TF+1):(p+AN*TN+AF*TF+p),2]
+logFat.robc.am <- matrix(summ.rep[which.logFat,1],AF,TF)
+logFat.se.robc.am <- matrix(summ.rep[which.logFat,2],AF,TF)
+logNat.robc.am <- matrix(summ.rep[which.logNat,1],AN,TN)
+logNat.se.robc.am <- matrix(summ.rep[which.logNat,2],AN,TN)
+Fat.robc.am <- matrix(summ.rep[which.Fat,1],AF,TF) # pred on original scale
+Nat.robc.am <- matrix(summ.rep[which.Nat,1],AN,TN) # pred on original scale
+
+w.rob.am <- NP_nst_weights(obj.robc.am) # robustness weights
+w.rob.am <- w.rob.am[5:8] # no need to rescale
+str(w.rob.am)
+# ^ list of 4 matrices, one for each loglik contribution: F_{a,t}, N_{a,t},
+#   C_{a,t}, and I_{a,t}
+
+
+# compare ML and robust estimates at the model
+cbind(theta,theta.ml.am,theta.se.ml.am,theta.robc.am,theta.se.robc.am)
+# ^ true theta, MLE and its se, robust and its se
+
+par(mfrow=c(5,3))
+for (j in 1:p){
+  plot(1:2,c(theta.ml.am[j],theta.robc.am[j]),pch=19,
+       xlim=c(0.7,2.3),ylim=theta[j]*c(0.5,1.5),xaxt='n',xlab='',ylab='',
+       main=names.theta[j])
+  arrows(x0=1:2,y0=c(theta.ml.am[j]-2*theta.se.ml.am[j],
+                     theta.robc.am[j]-2*theta.se.robc.am[j]),
+         x1=1:2,y1=c(theta.ml.am[j]+2*theta.se.ml.am[j],
+                     theta.robc.am[j]+2*theta.se.robc.am[j]),
+         angle=90,code=3,length=0.05)
+  # ^ error bars as rough 95% CI, just to give a sense of variability
+  axis(1,at=1:2,labels=c('ML','Robust'),lwd=0,lwd.ticks=1)
+  abline(h=theta[j],col='red')
+}
+par(mfrow=c(1,1))
+# ^ MLE and robust est generally nearly identical at the model
+
+
+# compare ML and robust predicted randeff at the model
+
+lb.Fat.ml.am <- exp(logFat.ml.am-2*logFat.se.ml.am)
+ub.Fat.ml.am <- exp(logFat.ml.am+2*logFat.se.ml.am)
+lb.Nat.ml.am <- exp(logNat.ml.am-2*logNat.se.ml.am)
+ub.Nat.ml.am <- exp(logNat.ml.am+2*logNat.se.ml.am)
+# ^ exponentiate bounds back on original scale
+
+lb.Fat.robc.am <- exp(logFat.robc.am-2*logFat.se.robc.am)
+ub.Fat.robc.am <- exp(logFat.robc.am+2*logFat.se.robc.am)
+lb.Nat.robc.am <- exp(logNat.robc.am-2*logNat.se.robc.am)
+ub.Nat.robc.am <- exp(logNat.robc.am+2*logNat.se.robc.am)
+# ^ exponentiate bounds back on original scale
+
+yearvec <- rep(NA,TF)
+every5 <- (0:9)*5+4
+yearvec[every5] <- year.F[every5] # label every 5 years
+
+col.pollockages <- c('#da5e16','#7a13be','#f00000','#000cf0',
+                     '#00850b','#c70074','#00c1d6','#6E7B8B')
+col.pollockages.env <- paste0(col.pollockages,'30') # semi-transparent
+
+names.age.F <- paste0('a = ',age.F)
+names.age.N <- paste0('a = ',age.N)
+names.age.I <- paste0('a = ',age.I)
+names.age.C <- names.age.N
+
+
+
+par(mfrow=c(2,2))
+# nst Fat ML
+plot(1:TF,type='n',xlab='',xaxt='n',ylim=c(0,1.2),
+     main='F_{a,t} ML predictions, at model',
+     ylab=expression('Fishing mortality'~italic(F)))
+axis(side=1,at=1:TF,labels=NA,tick=T,lwd=0,line=0.1,lwd.ticks=1)
+axis(side=1,at=every5,labels=NA,tick=T,lwd=0,line=0.1,lwd.ticks=1.5,tck=-0.03)
+text(x=1:TF,y=-0.1,labels=yearvec,srt=45,adj=c(1,1),xpd=T)
+for (j in 1:AF){
+  lines(1:TF,Fat.ml.am[j,],col=col.pollockages[j])
+  polygon(x=c(1:TF,TF:1),
+          y=c(lb.Fat.ml.am[j,],ub.Fat.ml.am[j,TF:1]),
+          col=paste0(col.pollockages[j],10),border=NA,xpd=F)
+}
+legend('topright',names.age.F,lty=1,bty='n',
+       col=col.pollockages[1:AF],fill=paste0(col.pollockages[1:AF],10),
+       border='transparent')
+# nst Fat Robust
+plot(1:TF,type='n',xlab='',xaxt='n',ylim=c(0,1.2),
+     main='F_{a,t} robust predictions, at model',
+     ylab=expression('Fishing mortality'~italic(F)))
+axis(side=1,at=1:TF,labels=NA,tick=T,lwd=0,line=0.1,lwd.ticks=1)
+axis(side=1,at=every5,labels=NA,tick=T,lwd=0,line=0.1,lwd.ticks=1.5,tck=-0.03)
+text(x=1:TF,y=-0.1,labels=yearvec,srt=45,adj=c(1,1),xpd=T)
+for (j in 1:AF){
+  lines(1:TF,Fat.robc.am[j,],col=col.pollockages[j])
+  polygon(x=c(1:TF,TF:1),
+          y=c(lb.Fat.robc.am[j,],ub.Fat.robc.am[j,TF:1]),
+          col=paste0(col.pollockages[j],10),border=NA,xpd=F)
+}
+# nst Nat ML
+plot(1:TF,type='n',xlab='',xaxt='n',ylim=c(600,2e6),
+     main='N_{a,t} ML predictions, at model',
+     ylab=expression('Abundance'~italic(N)))
+axis(side=1,at=1:TN,labels=NA,tick=T,lwd=0,line=0.1,lwd.ticks=1)
+axis(side=1,at=every5,labels=NA,tick=T,lwd=0,line=0.1,lwd.ticks=1.5,tck=-0.03)
+text(x=1:TN,y=-2e5,labels=yearvec,srt=45,adj=c(1,1),xpd=T)
+for (j in 1:AN){
+  lines(1:TN,Nat.ml.am[j,],col=col.pollockages[j])
+  polygon(x=c(1:TN,TN:1),
+          y=c(lb.Nat.ml.am[j,],ub.Nat.ml.am[j,TN:1]),
+          col=paste0(col.pollockages[j],10),border=NA,xpd=F)
+}
+legend(x='topright',names.age.N,lty=1,bty='n',
+       col=col.pollockages[1:AN],fill=paste0(col.pollockages[1:AF],10),
+       border='transparent')
+# nst Nat Robust
+plot(1:TF,type='n',xlab='',xaxt='n',ylim=c(600,2e6),
+     main='N_{a,t} robust predictions, at model',
+     ylab=expression('Abundance'~italic(N)))
+axis(side=1,at=1:TN,labels=NA,tick=T,lwd=0,line=0.1,lwd.ticks=1)
+axis(side=1,at=every5,labels=NA,tick=T,lwd=0,line=0.1,lwd.ticks=1.5,tck=-0.03)
+text(x=1:TN,y=-2e5,labels=yearvec,srt=45,adj=c(1,1),xpd=T)
+for (j in 1:AN){
+  lines(1:TN,Nat.robc.am[j,],col=col.pollockages[j])
+  polygon(x=c(1:TN,TN:1),
+          y=c(lb.Nat.robc.am[j,],ub.Nat.robc.am[j,TN:1]),
+          col=paste0(col.pollockages[j],10),border=NA,xpd=F)
+}
+par(mfrow=c(1,1))
+
+
+
+# investigate robustness weights at the model
+lapply(w.rob.am,function(x){summary(as.numeric(x))})
+# ^ nearly all weights are 1 as expected
+
+unlist(lapply(w.rob.am,function(x){which(x<0.8,arr.ind=T)}))
+# ^ only one really downweighted observation, given arbitrary threshold 0.8
+
+dat$logCat[,11:15]
+# ^ downweighted obs (6,13) may be atypically high given neighborhood
+
+
+# here!!!
 
 # TODO:
-# * robust estimation at model
-# * compare ML and rob est and randeff (graph) at model
-# * do the same unde contam
+# * do the same under contam
 # * do all the above for st version
+
 
 
 ### contaminate simulated response
