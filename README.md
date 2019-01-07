@@ -11,7 +11,7 @@ Any requests/comments/bug reports should be sent to william.aeberhard@gmail.com.
 
 Files contained in this repository:
 
-* RobSSM_Main.r: main R file that goes through all functions, simulates data, contaminates it, and compares ML and robust outputs TODO: finish
+* RobSSM_Main.r: main R file that goes through all functions, simulates data, contaminates it, and compares ML and robust outputs TODO: finish and time code execution on old laptop
 * NP_nst_gen.r: generate data according to the non-stationary (nst) state space model (SSM) used for the assessment of pollock in the North Sea;
 * NP_nst_nrcorrect.r: Newton-Raphson correction of the robustified gradient by Monte Carlo approximation of hte expected gradient;
 * NP_nst_transfo.r: transformation of model parameters, to feed optimization;
