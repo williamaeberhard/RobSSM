@@ -2,7 +2,7 @@
 #### RobSSM: Robust Estimation for State Space Models ####
 #/////////////////////////////////////////////////////////
 
-# RobSSM version 0.1, updated 2018-12-20
+# RobSSM version 0.1, updated 2019-01-07
 # Written by William H. Aeberhard <william.aeberhard@gmail.com>
 
 # Disclaimer:
