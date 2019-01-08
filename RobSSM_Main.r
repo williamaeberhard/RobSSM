@@ -208,7 +208,7 @@ obj.robu.am <- MakeADFun(data=datalist.rob.am,
 system.time(opt.robu.am <- nlminb(start=obj.robu.am$par,obj=obj.robu.am$fn,
                                   gr=obj.robu.am$gr,
                                   control=list(eval.max=1000,iter.max=1000)))
-# ^ about 2s on laptop
+# ^ about 3s on laptop
 opt.robu.am
 # ^ seems to have converged
 
@@ -227,7 +227,7 @@ logNat.robu.am <- matrix(summ.rep[which.logNat,1],AN,TN)
 
 system.time(opt.robc.am <- NP_nst_nrcorrect(theta.t=opt.robu.am$par,
                                             obj=obj.robu.am,H=H,maxit=1))
-# ^ XXX seconds with H=1000 # TODO
+# ^ about 16 min with H=1000 on laptop
 str(opt.robc.am,1)
 # ^ list with corrected robust gradient and (finite diff numerical) Hessian
 
@@ -243,7 +243,7 @@ invisible(obj.robc.am$fn())
 # ^ no outer optim, just predict randeff with inner optim (Laplace approx)
 
 system.time(rep.robc.am <- sdreport(obj.robc.am,bias.correct=F))
-# ^ about 2 s on laptop
+# ^ about 2s on laptop
 
 summ.rep <- summary(rep.robc.am) # overwrite summ.rep, big object
 theta.robc.am <- summ.rep[(p+AN*TN+AF*TF+1):(p+AN*TN+AF*TF+p),1] # opt.robc.am$theta
@@ -285,7 +285,6 @@ par(mfrow=c(1,1))
 
 
 # compare ML and robust predicted randeff at the model
-
 lb.Fat.ml.am <- exp(logFat.ml.am-2*logFat.se.ml.am)
 ub.Fat.ml.am <- exp(logFat.ml.am+2*logFat.se.ml.am)
 lb.Nat.ml.am <- exp(logNat.ml.am-2*logNat.se.ml.am)
@@ -380,10 +379,10 @@ lapply(w.rob.am,function(x){summary(as.numeric(x))})
 # ^ nearly all weights are 1 as expected
 
 unlist(lapply(w.rob.am,function(x){which(x<0.8,arr.ind=T)}))
-# ^ only one really downweighted observation, given arbitrary threshold 0.8
+# ^ only one heavily downweighted observation, given arbitrary threshold 0.8
 
 dat$logCat[,11:15]
-# ^ downweighted obs (6,13) may be atypically high given neighborhood
+# ^ downweighted obs (6,13) may be atypically high given neighboring obs
 
 
 ### contaminate simulated response
@@ -407,13 +406,13 @@ obj.ml.uc <- MakeADFun(data=datalist.ml.uc, # contam data
 # MLE: minimize (Laplace-approximated) marginal negloglik
 system.time(opt.ml.uc <- nlminb(start=obj.ml.uc$par,obj=obj.ml.uc$fn,gr=obj.ml.uc$gr,
                                 control=list(eval.max=1000,iter.max=1000)))
-# ^ about 2s
+# ^ about 2s on laptop
 opt.ml.uc
 # ^ seems to have converged
 
 # report theta estimates and randeff on original scale
 system.time(rep.ml.uc <- sdreport(obj.ml.uc,bias.correct=F))
-# ^ about 2s
+# ^ about 2s on laptop
 
 summ.rep <- summary(rep.ml.uc)
 theta.ml.uc <- summ.rep[(p+AN*TN+AF*TF+1):(p+AN*TN+AF*TF+p),1]
@@ -430,7 +429,6 @@ cbind(theta,theta.ml.am,theta.ml.uc)
 
 
 ### Robust estimation, under contam
-
 # Step 1/3: uncorrected robust estimator, minimize robustified marginal negloglik
 datalist.rob.uc <- list('log_Cat'=logCatcont,'log_Iat'=dat$logIat, # contam
                         'Mat'=Mat,'daysprop'=daysprop,
@@ -463,7 +461,8 @@ logNat.robu.uc <- matrix(summ.rep[which.logNat,1],AN,TN)
 
 system.time(opt.robc.uc <- NP_nst_nrcorrect(theta.t=opt.robu.uc$par,
                                             obj=obj.robu.uc,H=H,maxit=1))
-# ^ XXX seconds with H=1000 # TODO
+# ^ about 16 min with H=1000 on laptop
+# ^ also, warning can be ignored here, happened in intermediate iterations
 str(opt.robc.uc,1)
 # ^ list with corrected robust gradient and (finite diff numerical) Hessian
 
@@ -521,7 +520,7 @@ for (j in 1:p){
   abline(h=theta[j],col='red')
 }
 par(mfrow=c(1,1))
-# ^ robust est remains close to true value, MLE biased now
+# ^ robust est remains close to true value, MLE biased now for some elements
 
 
 # compare ML and robust predicted randeff at the model
